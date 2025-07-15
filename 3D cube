@@ -1,0 +1,161 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <sys/ioctl.h>
+#include <math.h>
+
+#define y 58
+#define x 210
+#define z 58
+
+char screen[y][x];
+
+void draw_line(int y1, int x1, int y2, int x2, char screen[][x])
+{
+    int dy = abs(y2 - y1);
+    int dx = abs(x2 - x1);
+    int sy = (y1 < y2) ? 1 : -1;
+    int sx = (x1 < x2) ? 1 : -1;
+    int err = dx - dy;
+    int e2;
+
+    while (1)
+    {
+        if (y1 >= 0 && y1 < y && x1 >= 0 && x1 < x)
+            screen[y1][x1] = '@';
+
+        if (y1 == y2 && x1 == x2)
+            break;
+
+        e2 = 2 * err;
+
+        if (e2 > -dy)
+        {
+            err -= dy;
+            x1 += sx;
+        }
+
+        if (e2 < dx)
+        {
+            err += dx;
+            y1 += sy;
+        }
+    }
+}
+
+void rotate_point(int *ym, int *xm, float angle_rad)
+{
+    int centerX = x / 2;
+    int centerY = y / 2;
+
+    float xf = *xm - centerX;
+    float yf = *ym - centerY;
+
+    float new_x = xf * cosf(angle_rad) - yf * sinf(angle_rad);
+    float new_y = xf * sinf(angle_rad) + yf * cosf(angle_rad);
+
+    *xm = (int)(new_x + centerX + 0.5f);
+    *ym = (int)(new_y + centerY + 0.5f);
+}
+
+
+void transform_z(int *cordY, int *cordX, int zC)
+{
+    *cordY += abs(zC / 2);
+    *cordX += abs(zC / 2);
+}
+
+int main()
+{
+    float angle = 0.00f;
+    while (1)
+    {
+        printf("\033[2J");
+
+        for (int iY = 0; iY < y; iY++)
+            for (int iX = 0; iX < x; iX++)
+                screen[iY][iX] = ' ';
+
+        int PpointY1 = 40;
+        int PpointX1 = 30 * 2;
+        int PpointZ1 = 0;
+        transform_z(&PpointY1, &PpointX1, PpointZ1);
+
+        int PpointY2 = 40;
+        int PpointX2 = 60 * 2;
+        int PpointZ2 = 0;
+        transform_z(&PpointY2, &PpointX2, PpointZ2);
+
+        int PpointY3 = 10;
+        int PpointX3 = 30 * 2;
+        int PpointZ3 = 0;
+        transform_z(&PpointY3, &PpointX3, PpointZ3);
+
+        int PpointY4 = 10;
+        int PpointX4 = 60 * 2;
+        int PpointZ4 = 0;
+        transform_z(&PpointY4, &PpointX4, PpointZ4);
+
+        int SpointY1 = 40;
+        int SpointX1 = 30 * 2;
+        int SpointZ1 = 30;
+        transform_z(&SpointY1, &SpointX1, SpointZ1);
+
+        int SpointY2 = 40;
+        int SpointX2 = 60 * 2;
+        int SpointZ2 = 30;
+        transform_z(&SpointY2, &SpointX2, SpointZ2);
+
+        int SpointY3 = 10;
+        int SpointX3 = 30 * 2;
+        int SpointZ3 = 30;
+        transform_z(&SpointY3, &SpointX3, SpointZ3);
+
+        int SpointY4 = 10;
+        int SpointX4 = 60 * 2;
+        int SpointZ4 = 30;
+        transform_z(&SpointY4, &SpointX4, SpointZ4);
+
+        rotate_point(&PpointY1, &PpointX1, angle);
+        rotate_point(&PpointY2, &PpointX2, angle);
+        rotate_point(&PpointY3, &PpointX3, angle);
+        rotate_point(&PpointY4, &PpointX4, angle);
+
+        rotate_point(&SpointY1, &SpointX1, angle);
+        rotate_point(&SpointY2, &SpointX2, angle);
+        rotate_point(&SpointY3, &SpointX3, angle);
+        rotate_point(&SpointY4, &SpointX4, angle);
+
+
+        draw_line(PpointY1, PpointX1, PpointY2, PpointX2, screen);
+        draw_line(PpointY1, PpointX1, PpointY3, PpointX3, screen);
+
+        draw_line(PpointY4, PpointX4, PpointY3, PpointX3, screen);
+        draw_line(PpointY4, PpointX4, PpointY2, PpointX2, screen);
+
+
+        draw_line(SpointY1, SpointX1, SpointY2, SpointX2, screen);
+        draw_line(SpointY1, SpointX1, SpointY3, SpointX3, screen);
+
+        draw_line(SpointY4, SpointX4, SpointY3, SpointX3, screen);
+        draw_line(SpointY4, SpointX4, SpointY2, SpointX2, screen);
+
+
+        draw_line(PpointY1, PpointX1, SpointY1, SpointX1, screen);
+        draw_line(PpointY2, PpointX2, SpointY2, SpointX2, screen);
+        draw_line(PpointY3, PpointX3, SpointY3, SpointX3, screen);
+        draw_line(PpointY4, PpointX4, SpointY4, SpointX4, screen);
+
+
+        for (int iY = 0; iY < y; iY++)
+        {
+            for (int iX = 0; iX < x; iX++)
+                printf("%c", screen[iY][iX]);
+            printf("\n");
+        }
+        usleep(100000);
+        angle += 0.05f;
+    }
+
+    return 0;
+}
