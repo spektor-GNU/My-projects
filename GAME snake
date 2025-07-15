@@ -1,0 +1,225 @@
+#include <stdio.h>
+#include <string.h>
+#include <stdlib.h>
+#include <time.h>
+#include <unistd.h>
+#include <termios.h>
+#include <fcntl.h>
+#include <signal.h>
+#include <sys/ioctl.h>
+
+#define y 10
+#define x 20
+
+struct termios oldt;
+
+void restore_terminal(void)
+{
+    tcsetattr(0, TCSANOW, &oldt);
+    fcntl(0, F_SETFL, 0);
+    printf("\033[0m\n");
+}
+
+void sigint_ctrl(int sig)
+{
+    restore_terminal();
+    exit(0);
+}
+
+int main()
+{
+    tcgetattr(0, &oldt);
+
+    struct winsize w;
+    ioctl(STDOUT_FILENO, TIOCGWINSZ, &w);
+    int width_terminal = w.ws_col;
+
+    signal(SIGINT, sigint_ctrl);
+    atexit(restore_terminal);
+
+    struct termios t;
+    tcgetattr(0, &t);
+    t.c_lflag &= ~ICANON;
+    t.c_lflag &= ~ECHO;
+    tcsetattr(0, TCSANOW, &t);
+    fcntl(0, F_SETFL, O_NONBLOCK);
+
+    srand(time(NULL));
+
+    char map[y][x];
+
+    for (int iY = 0; iY < y; iY++)
+        for (int iX = 0; iX < x; iX++)
+        {
+            if (iY == 0 || iY == (y - 1) || iX == 0 || iX == (y * 2 - 1))
+                map[iY][iX] = '#';
+            else
+                map[iY][iX] = ' ';
+        }
+
+    int high_score = 0;
+
+    FILE *filer = fopen("record.txt", "r");
+    if (filer != NULL)
+    {
+        fscanf(filer, "%d", &high_score);
+        fclose(filer);
+    }
+
+    int playerY = 5;
+    int playerX = 9;
+    char input;
+    char button = 'w';
+    int number_apple = 0;
+    int bodyY[300] = {0};
+    int bodyX[300] = {0};
+    int length = 0;
+    int eaten_apple;
+    unsigned long long frame = 0;
+    int frame_back;
+
+    while (frame < 2000000000ULL)
+    {
+        printf("\033[2J\033[10;0H");
+        bodyY[frame % 300] = playerY;
+        bodyX[frame % 300] = playerX;
+
+        int oldY = playerY;
+        int oldX = playerX;
+        int random_appleY;
+        int random_appleX;
+        eaten_apple = 0;
+
+        again:
+        random_appleY = random() % y;
+        random_appleX = random() % x;
+        if (map[random_appleY][random_appleX] == '#')
+            goto again;
+        else if (map[random_appleY][random_appleX] == '0')
+            goto again;
+        else if (number_apple >= 1)
+            goto miss;
+        else
+        {
+            map[random_appleY][random_appleX] = '*';
+            number_apple = 1;
+        }
+
+        miss:
+        ;
+        ssize_t result = read(0, &input, 1);
+        if (result > 0)
+        {
+            if ((input == 'w' || input == 'W') && button != 's')
+                button = 'w';
+            else if ((input == 's' || input == 'S') && button != 'w')
+                button = 's';
+            else if ((input == 'a' || input == 'A') && button != 'd')
+                button = 'a';
+            else if ((input == 'd' || input == 'D') && button != 'a')
+                button = 'd';
+            else if (input == 'q' || input == 'Q')
+            {
+                goto exit;
+            }
+        }
+
+        if (button == 'w')
+            playerY--;
+        else if (button == 's')
+            playerY++;
+        else if (button == 'a')
+            playerX--;
+        else if (button == 'd')
+            playerX++;
+
+        if (map[playerY][playerX] == '#')
+            goto exit;
+        else if (map[playerY][playerX] == 'o')
+            goto exit;
+
+        if (map[playerY][playerX] == '*')
+        {
+            number_apple = 0;
+            length++;
+            eaten_apple = 1;
+            if (length > 299)
+                length = 299;
+            map[playerY][playerX] = '0';
+            again1:
+            random_appleY = random() % y;
+            random_appleX = random() % x;
+            if (map[random_appleY][random_appleX] != ' ')
+                goto again1;
+            else
+            {
+                map[random_appleY][random_appleX] = '*';
+                number_apple = 1;
+            }
+        }
+        else
+            map[playerY][playerX] = '0';
+
+        if (length == 0)
+        {
+            map[oldY][oldX] = ' ';
+        }
+        else if (!eaten_apple && length > 0)
+        {
+            int tail_idx = (frame - length + 300) % 300;
+            map[bodyY[tail_idx]][bodyX[tail_idx]] = ' ';
+        }
+
+        if (length != 0)
+        {
+            for (int i = 1; i < length; i++)
+            {
+                int idx = (frame - i + 300) % 300;
+                map[bodyY[idx]][bodyX[idx]] = 'o';
+            }
+        }
+
+        printf("\033[106;96m\033[1;0H%*s", width_terminal * 45, ".");
+        printf("\033[15;23H\033[30mОчки: %d     \tРекорд: %d", length * 10, high_score * 10);
+        for (int iY = 0; iY < y; iY++)
+        {
+            int strY = iY + 17;
+            printf("\033[%d;27H", strY);
+
+            for (int iX = 0; iX < x; iX++)
+            {
+                if (map[iY][iX] == '0')
+                    printf("\033[46;36m%c\033[0m", map[iY][iX]);
+                else if (map[iY][iX] == 'o')
+                    printf("\033[46;36m%c\033[0m", map[iY][iX]);
+                else if (map[iY][iX] == '#')
+                    printf("\033[42;92m%c\033[0m", map[iY][iX]);
+                else if (map[iY][iX] == '*')
+                    printf("\033[41;31m%c\033[0m", map[iY][iX]);
+                else
+                    printf("\033[102m%c\033[0m", map[iY][iX]);
+            }
+            printf("\n");
+        }
+
+        while (read(0, &input, 1) > 0)
+        ;
+        frame++;
+        usleep(600000);
+    }
+
+    exit:
+    tcsetattr(0, TCSANOW, &oldt);
+    fcntl(0, F_SETFL, 0);
+    printf("\033[0m\n");
+    if (length > high_score)
+    {
+        FILE *filer = fopen("record.txt", "w");
+        if (filer != NULL)
+        {
+            fprintf(filer, "%d", length);
+            fclose(filer);
+        }
+    }
+    return 0;
+}
